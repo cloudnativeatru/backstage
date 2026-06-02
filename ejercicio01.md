@@ -12,8 +12,6 @@ Al finalizar esta guía tendrás una instalación standalone de Backstage corrie
 
 > ⚠️ **Importante:** Esta instalación **no es apta para producción** y no contiene información específica de tu organización hasta que configures las integraciones con tus fuentes de datos.
 
-> 💡 **Colaboradores:** Si planeas contribuir con una nueva funcionalidad o corrección de bug al proyecto Backstage, sigue la guía de [Contributors](https://github.com/backstage/backstage/blob/master/CONTRIBUTING.md#get-started) para una instalación basada en repositorio.
-
 ---
 
 ## 📁 Estructura de carpetas
@@ -164,56 +162,6 @@ http://localhost:3000
 ```
 
 > 💡 Si la ventana del navegador no se abrió automáticamente, navega manualmente a la URL anterior.
-
----
-
-## 🧭 Próximos pasos
-
-### 👨‍💼 Para Administradores
-
-**Configuración:**
-- [Configurar autenticación](https://backstage.io/docs/getting-started/config/authentication)
-- [Configurar base de datos](https://backstage.io/docs/getting-started/config/database)
-- [Agregar plugins](https://backstage.io/docs/getting-started/configure-app-with-plugins)
-- [Personalizar la interfaz](https://backstage.io/docs/conf/user-interface/)
-- [Configurar la página principal](https://backstage.io/docs/getting-started/homepage)
-
-**Despliegue a producción:**
-- [Desplegar con Docker](https://backstage.io/docs/deployment/docker)
-- [Desplegar con Kubernetes](https://backstage.io/docs/deployment/k8s)
-
----
-
-### 👨‍💻 Para Desarrolladores
-
-**Usando tu instancia de Backstage:**
-- [Iniciar sesión en Backstage](https://backstage.io/docs/getting-started/logging-in)
-- [Ver el Catálogo](https://backstage.io/docs/getting-started/viewing-catalog)
-- [Ver lo que tienes registrado](https://backstage.io/docs/getting-started/view-what-you-own)
-- [Ver relaciones entre entidades](https://backstage.io/docs/getting-started/viewing-entity-relationships)
-- [Filtrar el Catálogo](https://backstage.io/docs/getting-started/filter-catalog)
-- [Registrar un componente](https://backstage.io/docs/getting-started/register-a-component)
-- [Crear un nuevo componente](https://backstage.io/docs/getting-started/create-a-component)
-- [Actualizar un componente](https://backstage.io/docs/getting-started/update-a-component)
-- [Desregistrar y eliminar un componente](https://backstage.io/docs/getting-started/unregister-delete-component)
-
----
-
-## 💬 Comunidad y soporte
-
-¿Tienes comentarios, sugerencias o encontraste un problema?
-
-- 💬 Únete al [Discord de Backstage](https://discord.gg/backstage-687207715902193673)
-- 🐛 Reporta [sugerencias de features](https://github.com/backstage/backstage/issues/new?labels=help+wanted&template=feature_template.md)
-- 🔌 Propón [nuevos plugins](https://github.com/backstage/community-plugins/issues/new/choose)
-
----
-
-## 🔗 Referencias
-
-- [Documentación oficial de Backstage](https://backstage.io/docs/getting-started/)
-- [Repositorio en GitHub](https://github.com/backstage/backstage)
-- [Versión estable actual: v1.51.0](https://backstage.io/docs/releases/v1.51.0)
 
 ---
 
