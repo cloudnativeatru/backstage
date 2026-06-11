@@ -11,28 +11,6 @@
 
 ---
 
-## Paso previo — Subir este lab a GitHub
-
-Backstage lee los `catalog-info.yaml` directamente desde GitHub. Es la forma más
-limpia: no necesitas servidor HTTP local ni configurar `backend.reading.allow`.
-
-```bash
-# Desde la carpeta lab-04/
-git init
-git add .
-git commit -m "feat: lab-04 API Catalog & OpenAPI Integration"
-
-# Opción A — con GitHub CLI
-gh repo create lab-04-backstage --public --source=. --push
-
-# Opción B — manual
-# 1. Crea el repo en https://github.com/new  (nombre: lab-04-backstage, público)
-# 2. git remote add origin https://github.com/TU_USUARIO/lab-04-backstage.git
-# 3. git push -u origin main
-```
-
-Una vez subido, tus URLs de registro quedan así (reemplaza `TU_USUARIO`):
-
 ```
 # Registro unificado — 7 entidades de un golpe:
 https://github.com/TU_USUARIO/lab-04-backstage/blob/main/all-components.yaml
