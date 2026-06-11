@@ -11,6 +11,52 @@
 
 ---
 
+## Paso previo — Subir este lab a GitHub
+
+Backstage lee los `catalog-info.yaml` directamente desde GitHub. Es la forma más
+limpia: no necesitas servidor HTTP local ni configurar `backend.reading.allow`.
+
+```bash
+# Desde la carpeta lab-04/
+git init
+git add .
+git commit -m "feat: lab-04 API Catalog & OpenAPI Integration"
+
+# Opción A — con GitHub CLI
+gh repo create lab-04-backstage --public --source=. --push
+
+# Opción B — manual
+# 1. Crea el repo en https://github.com/new  (nombre: lab-04-backstage, público)
+# 2. git remote add origin https://github.com/TU_USUARIO/lab-04-backstage.git
+# 3. git push -u origin main
+```
+
+Una vez subido, tus URLs de registro quedan así (reemplaza `TU_USUARIO`):
+
+```
+# Registro unificado — 7 entidades de un golpe:
+https://github.com/TU_USUARIO/lab-04-backstage/blob/main/all-components.yaml
+
+# O por separado:
+https://github.com/TU_USUARIO/lab-04-backstage/blob/main/payments-api/catalog-info.yaml
+https://github.com/TU_USUARIO/lab-04-backstage/blob/main/accounts-api/catalog-info.yaml
+https://github.com/TU_USUARIO/lab-04-backstage/blob/main/notifications-service/catalog-info.yaml
+```
+
+> **Repo privado:** necesitas un token de GitHub en `app-config.yaml`:
+> ```yaml
+> integrations:
+>   github:
+>     - host: github.com
+>       token: ${GITHUB_TOKEN}
+> ```
+> **Repo público:** no necesitas token, Backstage lo lee directamente.
+
+> **Rutas `$text` relativas:** Backstage resuelve automáticamente las rutas como
+> `./openapi/payments.yaml` desde el mismo repo y rama. No necesitas cambiar nada.
+
+---
+
 ## Estructura de este repositorio
 
 ```
@@ -93,12 +139,12 @@ lab-04/
 
 ```
 System: fintech-rapida
-  ├── Component: payments-api         → providesApis: [payments-openapi, payments-asyncapi]
-  ├── Component: accounts-api         → providesApis: [accounts-openapi]
+  ├── Component: payments-api          → providesApis: [payments-openapi, payments-asyncapi]
+  ├── Component: accounts-api          → providesApis: [accounts-openapi]
   ├── Component: notifications-service → consumesApis: [payments-asyncapi]
-  ├── API: payments-openapi           (type: openapi)
-  ├── API: accounts-openapi           (type: openapi)
-  └── API: payments-asyncapi          (type: asyncapi)
+  ├── API: payments-openapi            (type: openapi)
+  ├── API: accounts-openapi            (type: openapi)
+  └── API: payments-asyncapi           (type: asyncapi)
 ```
 
 ---
@@ -117,39 +163,29 @@ En tu Backstage **no existe** `EntityPage.tsx` ni `FlatRoutes`. Los plugins se r
 como `features` en `App.tsx`. El plugin de API Docs tiene una versión `/alpha` compatible
 con esta arquitectura.
 
-### Ejercicio Tema 1: Habilitar el plugin de API Docs (~30 min)
+### Ejercicio Tema 1: Habilitar el plugin de API Docs
 
-#### Paso 1 — Instalar el paquete (ya lo hiciste)
+#### Paso 1 — Instalar el paquete
 
 ```bash
 yarn --cwd packages/app add @backstage/plugin-api-docs
 ```
 
-#### Paso 2 — Importar y registrar el plugin en `App.tsx`
+#### Paso 2 — Importar y registrar en `App.tsx`
 
-Abre `packages/app/src/App.tsx` y agrega el plugin en el array `features`:
+Abre `packages/app/src/App.tsx` y aplica estos dos cambios:
 
 ```tsx
-// ANTES (tu App.tsx actual):
-import { createApp } from '@backstage/frontend-defaults';
-import catalogPlugin from '@backstage/plugin-catalog/alpha';
-import { navModule } from './modules/nav';
-import { githubAuthApiRef } from '@backstage/core-plugin-api';
-import { SignInPageBlueprint } from '@backstage/plugin-app-react';
-import { SignInPage } from '@backstage/core-components';
-import { createFrontendModule } from '@backstage/frontend-plugin-api';
-import githubActionsPlugin from '@backstage-community/plugin-github-actions/alpha';
-
-// AGREGAR esta línea de import:
+// 1. Agrega este import junto a los demás imports:
 import apiDocsPlugin from '@backstage/plugin-api-docs/alpha';
 
-// DESPUÉS — agregar apiDocsPlugin al array features:
+// 2. Agrega apiDocsPlugin al array features:
 export default createApp({
   features: [
     catalogPlugin,
     navModule,
     githubActionsPlugin,
-    apiDocsPlugin,          // ← agrega esta línea
+    apiDocsPlugin,          // ← nueva línea
     createFrontendModule({
       pluginId: 'app',
       extensions: [signInPage],
@@ -158,37 +194,35 @@ export default createApp({
 });
 ```
 
-> **¿Por qué `/alpha`?** La nueva arquitectura declarativa de Backstage requiere que
-> los plugins exporten sus extensiones desde el entry point `/alpha`. Sin eso,
-> el plugin no registra sus vistas en el catálogo.
+> **¿Por qué `/alpha`?** La nueva arquitectura declarativa requiere que los plugins
+> exporten sus extensiones desde `/alpha`. Sin esa barra, el paquete se instala pero
+> no registra nada en la UI — por eso no aparecía nada.
 
 #### Paso 3 — Reiniciar Backstage
 
 ```bash
-# Detén el proceso actual (Ctrl+C) y vuelve a arrancar:
+# Ctrl+C para detener, luego:
 yarn dev
 ```
 
 #### Paso 4 — Verificar que el plugin cargó
 
 1. Abre `http://localhost:3000`
-2. En el menú lateral busca **"APIs"** — si aparece, el plugin está activo
-3. Si no aparece en el menú: verifica que el import es desde `/alpha` (no desde la raíz)
+2. En el menú lateral debe aparecer **"APIs"**
+3. Si no aparece: verifica que el import incluye `/alpha`
 
-#### Paso 5 — Registrar la primera API y verla
+#### Paso 5 — Registrar la primera API desde GitHub
 
-Arranca el servidor HTTP del lab (desde la carpeta `lab-04`):
+Con el repo ya subido a GitHub:
 
-```bash
-npx serve . -p 8080
-```
-
-Luego en Backstage:
 1. Ve a **Catalog → + Register Existing Component**
-2. Ingresa: `http://localhost:8080/payments-api/catalog-info.yaml`
-3. Haz clic en **Analyze** → **Import**
+2. Ingresa la URL de GitHub:
+   ```
+   https://github.com/TU_USUARIO/lab-04-backstage/blob/main/payments-api/catalog-info.yaml
+   ```
+3. Clic en **Analyze** → **Import**
 4. Ve a **Catalog → APIs → payments-openapi**
-5. Pestaña **Definition** → deberías ver el **Swagger UI interactivo**
+5. Pestaña **Definition** → Swagger UI interactivo
 
 ✅ **Checkpoint:** Swagger UI renderiza con los endpoints de `payments-api`.
 
@@ -217,32 +251,34 @@ spec:
   providesApis:
     - payments-openapi      # ← nombre de la entidad API
 
-# La entidad API con su spec:
+# La entidad API con su spec (ruta relativa dentro del mismo repo):
 spec:
   type: openapi
   definition:
-    $text: ./payments-api/openapi/payments.yaml   # ← ruta al YAML real
+    $text: ./payments-api/openapi/payments.yaml
 ```
 
-#### Paso 2 — Registrar todo de un golpe
-
-Con el servidor HTTP corriendo (`npx serve . -p 8080`):
+#### Paso 2 — Registrar todo de un golpe desde GitHub
 
 1. Ve a **Catalog → + Register Existing Component**
-2. Ingresa: `http://localhost:8080/all-components.yaml`
-3. Backstage detectará las 7 entidades — haz clic en **Import All**
+2. Ingresa:
+   ```
+   https://github.com/TU_USUARIO/lab-04-backstage/blob/main/all-components.yaml
+   ```
+3. Clic en **Analyze** — Backstage detectará las 7 entidades
+4. Clic en **Import**
 
 #### Paso 3 — Verificar en Backstage
 
-- **Catalog → Systems** → debe aparecer `fintech-rapida`
-- **Catalog → APIs** → deben aparecer `payments-openapi`, `accounts-openapi`, `payments-asyncapi`
-- **Catalog → Components** → deben aparecer los 3 servicios
+- **Catalog → Systems** → `fintech-rapida` ✓
+- **Catalog → APIs** → `payments-openapi`, `accounts-openapi`, `payments-asyncapi` ✓
+- **Catalog → Components** → `payments-api`, `accounts-api`, `notifications-service` ✓
 
 #### Paso 4 — Ver el grafo de relaciones
 
-1. Ve a **Catalog → Systems → fintech-rapida**
+1. **Catalog → Systems → fintech-rapida**
 2. Pestaña **Diagram**
-3. El grafo debe mostrar las flechas entre componentes y APIs
+3. Verifica las flechas entre componentes y APIs
 
 ✅ **Checkpoint:** Grafo con 7 nodos y flechas de `providesApis`/`consumesApis`.
 
@@ -253,32 +289,31 @@ Con el servidor HTTP corriendo (`npx serve . -p 8080`):
 ### Concepto
 
 TechDocs renderiza Markdown del repo como documentación navegable dentro de Backstage.
-La documentation vive en Git junto al código. Requiere dos archivos: `mkdocs.yml` y
-la carpeta `docs/`.
+La documentación vive en Git junto al código. Requiere `mkdocs.yml` y carpeta `docs/`.
 
-### Archivos ya listos en este lab
+### Archivos ya listos en este repo
 
 ```
 payments-api/
 ├── mkdocs.yml          ← config MkDocs con plugin techdocs-core
 └── docs/
     ├── index.md        ← página principal
-    └── architecture.md ← diagrama de flujo
+    └── architecture.md ← diagrama de flujo y decisiones de diseño
 ```
 
 ### Ejercicio Tema 3: Visualizar TechDocs
 
 #### Paso 1 — Verificar la annotation obligatoria
 
-Abre `payments-api/catalog-info.yaml` y confirma que existe:
+Abre `payments-api/catalog-info.yaml` y confirma:
 
 ```yaml
 metadata:
   annotations:
-    backstage.io/techdocs-ref: dir:.   # ← SIN esta annotation, TechDocs no funciona
+    backstage.io/techdocs-ref: dir:.   # ← SIN esto, TechDocs no funciona
 ```
 
-Todos los `catalog-info.yaml` del lab ya la tienen.
+Todos los `catalog-info.yaml` del lab ya la tienen incluida.
 
 #### Paso 2 — Verificar `mkdocs.yml`
 
@@ -294,20 +329,18 @@ plugins:
 
 #### Paso 3 — Habilitar TechDocs en `app-config.yaml`
 
-Abre el `app-config.yaml` de tu Backstage y verifica (o agrega) esta sección:
+En tu Backstage, abre `app-config.yaml` y verifica (o agrega):
 
 ```yaml
 techdocs:
-  builder: 'local'           # genera docs en tu máquina
+  builder: 'local'
   generator:
-    runIn: 'local'           # sin Docker
+    runIn: 'local'
   publisher:
-    type: 'local'            # guarda en disco local
+    type: 'local'
 ```
 
-> Si no tienes esta config, TechDocs mostrará "Documentation not found".
-
-#### Paso 4 — Instalar el generador de TechDocs (una sola vez)
+#### Paso 4 — Instalar el generador (una sola vez)
 
 ```bash
 pip install mkdocs-techdocs-core
@@ -315,24 +348,22 @@ pip install mkdocs-techdocs-core
 
 #### Paso 5 — Verificar en Backstage
 
-1. **Catalog → Components → payments-api**
-2. Pestaña **Docs**
-3. Debes ver las páginas `Home` y `Architecture` renderizadas
+1. **Catalog → Components → payments-api → Docs**
+2. Debes ver las páginas `Home` y `Architecture` renderizadas
 
-#### Actividad adicional
-
-Agrega una nueva página al lab:
+#### Actividad adicional — Agregar una nueva página
 
 ```bash
-# Crear el archivo
+# En tu repo local, crear el archivo:
 cat > payments-api/docs/errores.md << 'EOF'
 # Errores comunes
 
-## 400 — amount inválido
-El campo `amount` debe ser mayor a 0.
-
-## 409 — Pago no cancelable
-Solo se pueden cancelar pagos en estado `created`.
+| Código | Mensaje                        | Causa                          |
+|--------|--------------------------------|--------------------------------|
+| 400    | amount debe ser mayor a 0      | El campo amount es 0 o negativo|
+| 400    | currency inválido               | Usar solo: PEN, USD, EUR       |
+| 404    | Pago no encontrado             | El paymentId no existe         |
+| 409    | No se puede cancelar           | El pago no está en estado created |
 EOF
 ```
 
@@ -345,9 +376,17 @@ nav:
   - Errores: errores.md    # ← agregar esta línea
 ```
 
-Recarga la pestaña Docs en Backstage → debe aparecer la nueva página.
+Haz commit y push:
 
-✅ **Checkpoint:** TechDocs muestra las páginas navegables dentro de Backstage.
+```bash
+git add payments-api/docs/errores.md payments-api/mkdocs.yml
+git commit -m "docs: agregar página de errores"
+git push
+```
+
+Recarga la pestaña Docs en Backstage → nueva página visible.
+
+✅ **Checkpoint:** TechDocs muestra 3 páginas navegables.
 
 ---
 
@@ -357,56 +396,47 @@ Recarga la pestaña Docs en Backstage → debe aparecer la nueva página.
 
 AsyncAPI es el estándar equivalente a OpenAPI para comunicación asíncrona (Kafka, RabbitMQ,
 SQS). Backstage lo renderiza automáticamente cuando `spec.type: asyncapi`.
+El plugin `@backstage/plugin-api-docs/alpha` maneja tanto OpenAPI como AsyncAPI — no
+necesitas instalar nada adicional.
 
 ### Ejercicio Tema 4: Explorar AsyncAPI Studio
 
-#### Paso 1 — Verificar que el plugin api-docs cargó (del Tema 1)
-
-El plugin `@backstage/plugin-api-docs/alpha` maneja **tanto** OpenAPI como AsyncAPI.
-No necesitas instalar un plugin adicional.
-
-#### Paso 2 — Ver el archivo AsyncAPI del lab
+#### Paso 1 — Ver el archivo AsyncAPI del lab
 
 Abre `payments-api/asyncapi/payments-events.yaml`. Describe 3 topics de Kafka:
 
 ```yaml
 channels:
-  payment.created:      # ← emitido al crear un pago
-  payment.processed:    # ← emitido al aprobar/rechazar
-  account.updated:      # ← emitido al cambiar saldo
+  payment.created:      # emitido al crear un pago
+  payment.processed:    # emitido al aprobar o rechazar
+  account.updated:      # emitido al cambiar saldo de cuenta
 ```
 
-#### Paso 3 — Verificar el tipo en `catalog-info.yaml`
+#### Paso 2 — Verificar el tipo en `catalog-info.yaml`
 
 ```yaml
-# En payments-api/catalog-info.yaml
+# payments-api/catalog-info.yaml
 spec:
   type: asyncapi          # ← diferencia clave vs openapi
   definition:
     $text: ./asyncapi/payments-events.yaml
 ```
 
-#### Paso 4 — Ver AsyncAPI Studio en Backstage
+#### Paso 3 — Ver AsyncAPI Studio en Backstage
 
 1. **Catalog → APIs → payments-asyncapi**
-2. Pestaña **Definition**
+2. Pestaña **Definition** → AsyncAPI Studio
 3. Explora los channels y sus schemas de payload
+4. Pestaña **Relations** → verifica Provider y Consumer
 
-#### Paso 5 — Análisis del schema (actividad)
+#### Paso 4 — Actividad: Agregar un nuevo channel
 
-Responde en base al archivo `payments-events.yaml`:
-
-- ¿Qué campos son `required` en `PaymentCreatedPayload`?
-- ¿Qué valores acepta `status` en `PaymentProcessedPayload`?
-- ¿Qué protocolo usa el server `local`?
-
-#### Actividad adicional: Agregar un nuevo channel
-
-Abre `payments-api/asyncapi/payments-events.yaml` y agrega al final de `channels`:
+En tu repo local, abre `payments-api/asyncapi/payments-events.yaml` y agrega
+al final de la sección `channels`:
 
 ```yaml
   payment.refunded:
-    description: Emitido cuando un pago es reembolsado
+    description: Emitido cuando un pago es reembolsado al origen
     publish:
       operationId: onPaymentRefunded
       summary: Pago reembolsado
@@ -428,8 +458,7 @@ Abre `payments-api/asyncapi/payments-events.yaml` y agrega al final de `channels
               format: date-time
 ```
 
-Recarga la entidad en Backstage (o espera el refresh automático) → el nuevo channel
-`payment.refunded` debe aparecer en el AsyncAPI Studio.
+Haz commit y push → el nuevo channel aparece en AsyncAPI Studio sin re-registrar.
 
 ✅ **Checkpoint:** AsyncAPI Studio muestra 4 channels con sus schemas.
 
@@ -439,11 +468,12 @@ Recarga la entidad en Backstage (o espera el refresh automático) → el nuevo c
 
 ---
 
-### FASE 0 — Prerequisito: Plugin API Docs habilitado (5 min)
+### FASE 0 — Prerequisitos (10 min)
 
-Antes de continuar, confirma que completaste el Tema 1:
+Antes de continuar, confirma:
 
-- [ ] `apiDocsPlugin` importado desde `@backstage/plugin-api-docs/alpha`
+- [ ] Repo `lab-04-backstage` creado en GitHub y con push hecho
+- [ ] `apiDocsPlugin` importado desde `@backstage/plugin-api-docs/alpha` en `App.tsx`
 - [ ] `apiDocsPlugin` agregado al array `features` en `App.tsx`
 - [ ] Backstage reiniciado con `yarn dev`
 - [ ] El menú lateral muestra **"APIs"**
@@ -458,19 +488,13 @@ Si no ves "APIs" en el menú, **no avances** — revisa el Tema 1 primero.
 # Desde la carpeta lab-04/
 
 # payments-api (Node.js)
-cd payments-api
-npm install
-cd ..
+cd payments-api && npm install && cd ..
 
 # accounts-api (Python)
-cd accounts-api
-pip install -r requirements.txt
-cd ..
+cd accounts-api && pip install -r requirements.txt && cd ..
 
 # notifications-service (Node.js)
-cd notifications-service
-npm install
-cd ..
+cd notifications-service && npm install && cd ..
 ```
 
 ---
@@ -512,37 +536,22 @@ curl http://localhost:3001/health
 # {"status":"ok","service":"accounts-api","version":"1.0.0"}
 ```
 
-**Verificar Swagger UI directo (fuera de Backstage):**
-
-```bash
-open http://localhost:3000/api-docs
-# Abre el Swagger UI de payments-api en el browser
-```
-
 ---
 
-### FASE 3 — Registrar entidades en Backstage (20 min)
+### FASE 3 — Registrar entidades en Backstage desde GitHub (20 min)
 
-#### Paso 1 — Arrancar servidor HTTP para los archivos del lab
-
-```bash
-# En un 4to terminal, desde lab-04/
-npx serve . -p 8080
-# ✅ Esperado: Serving files from lab-04/ at http://localhost:8080
-```
-
-#### Paso 2 — Registrar el sistema completo
+#### Paso 1 — Registrar el sistema completo de un golpe
 
 1. Abre Backstage: `http://localhost:3000`
 2. Ve a **Catalog → + Register Existing Component**
-3. Ingresa la URL:
+3. Ingresa la URL de GitHub (reemplaza `TU_USUARIO`):
    ```
-   http://localhost:8080/all-components.yaml
+   https://github.com/TU_USUARIO/lab-04-backstage/blob/main/all-components.yaml
    ```
 4. Clic en **Analyze**
-5. Backstage mostrará las 7 entidades detectadas — clic en **Import**
+5. Backstage detectará las 7 entidades — clic en **Import**
 
-#### Paso 3 — Verificar el registro
+#### Paso 2 — Verificar el registro
 
 | Entidad | Tipo | Dónde verificar |
 |---------|------|-----------------|
@@ -554,21 +563,16 @@ npx serve . -p 8080
 | `accounts-openapi` | API | Catalog → APIs |
 | `payments-asyncapi` | API | Catalog → APIs |
 
-> **Si aparece error "Not Found" en alguna spec:**  
-> Verifica que el servidor HTTP en puerto 8080 está corriendo y que la ruta en
-> `definition.$text` del YAML coincide con la estructura real de carpetas.
-
 ---
 
 ### FASE 4 — Explorar el API Catalog (20 min)
 
 #### 4.1 Swagger UI de payments-api
 
-1. **Catalog → APIs → payments-openapi**
-2. Pestaña **Definition** → Swagger UI
-3. Ejecuta directamente desde Backstage:
-   - Expande `POST /payments` → clic en **Try it out**
-   - Usa este body:
+1. **Catalog → APIs → payments-openapi → Definition**
+2. Ejecuta directamente desde Backstage:
+   - Expande `POST /payments` → **Try it out**
+   - Body de ejemplo:
      ```json
      {
        "amount": 350.00,
@@ -578,36 +582,31 @@ npx serve . -p 8080
        "description": "Prueba desde Backstage"
      }
      ```
-   - Clic en **Execute**
-   - Copia el `paymentId` de la respuesta
-
-4. Expande `GET /payments/{paymentId}` → pega el ID → **Execute**
+   - **Execute** → copia el `paymentId` de la respuesta
+3. Expande `GET /payments/{paymentId}` → pega el ID → **Execute**
 
 #### 4.2 Swagger UI de accounts-api
 
-1. **Catalog → APIs → accounts-openapi**
-2. Pestaña **Definition** → Swagger UI
-3. Explora los endpoints de cuentas
+1. **Catalog → APIs → accounts-openapi → Definition**
+2. Explora los endpoints de cuentas desde Backstage
 
-Alternativamente, la FastAPI docs nativa:
+Alternativa nativa de FastAPI:
 ```
 http://localhost:3001/docs
 ```
 
 #### 4.3 AsyncAPI Studio de payments-asyncapi
 
-1. **Catalog → APIs → payments-asyncapi**
-2. Pestaña **Definition** → AsyncAPI Studio
-3. Explora los 3 channels: `payment.created`, `payment.processed`, `account.updated`
-4. Pestaña **Relations** → verifica que aparecen:
+1. **Catalog → APIs → payments-asyncapi → Definition**
+2. Explora los 3 channels: `payment.created`, `payment.processed`, `account.updated`
+3. Pestaña **Relations** → verifica:
    - `payments-api` como **Provider**
    - `notifications-service` como **Consumer**
 
 #### 4.4 Grafo del sistema
 
-1. **Catalog → Systems → fintech-rapida**
-2. Pestaña **Diagram**
-3. El grafo debe mostrar:
+1. **Catalog → Systems → fintech-rapida → Diagram**
+2. El grafo debe mostrar:
 
 ```
 [payments-api] ──providesApis──► [payments-openapi]
@@ -621,8 +620,6 @@ http://localhost:3001/docs
 ### FASE 5 — TechDocs (15 min)
 
 #### Paso 1 — Verificar configuración en `app-config.yaml`
-
-En tu Backstage, abre `app-config.yaml` y verifica/agrega:
 
 ```yaml
 techdocs:
@@ -641,43 +638,42 @@ pip install mkdocs-techdocs-core
 
 #### Paso 3 — Verificar en Backstage
 
-1. **Catalog → Components → payments-api**
-2. Pestaña **Docs**
-3. Debes ver navegación con: `Home` y `Architecture`
+1. **Catalog → Components → payments-api → Docs**
+2. Debes ver: `Home` y `Architecture`
 
-#### Paso 4 — Actividad: Agregar página de errores
+#### Paso 4 — Actividad: Agregar página y hacer push
 
 ```bash
-# Desde lab-04/
+# Crear nueva página
 cat > payments-api/docs/errores.md << 'EOF'
 # Errores comunes
 
-| Código | Mensaje | Causa |
-|--------|---------|-------|
-| 400 | amount debe ser mayor a 0 | El campo amount es 0 o negativo |
-| 400 | currency inválido | Usar solo: PEN, USD, EUR |
-| 404 | Pago no encontrado | El paymentId no existe |
-| 409 | No se puede cancelar | El pago no está en estado created |
+| Código | Mensaje                   | Causa                             |
+|--------|---------------------------|-----------------------------------|
+| 400    | amount debe ser mayor a 0 | El campo amount es 0 o negativo   |
+| 400    | currency inválido          | Usar solo: PEN, USD, EUR          |
+| 404    | Pago no encontrado        | El paymentId no existe            |
+| 409    | No se puede cancelar      | El pago no está en estado created |
 EOF
+
+# Actualizar mkdocs.yml para incluirla
+# (edita el archivo y agrega "  - Errores: errores.md" en el nav)
+
+# Subir cambios
+git add .
+git commit -m "docs: agregar página de errores comunes"
+git push
 ```
 
-Actualiza `payments-api/mkdocs.yml`:
-
-```yaml
-nav:
-  - Home: index.md
-  - Architecture: architecture.md
-  - Errores: errores.md
-```
-
-Recarga la pestaña Docs en Backstage para ver el cambio.
+Backstage hace refresh automático del catálogo cada cierto tiempo.
+Para forzarlo: abre la entidad → menú de 3 puntos → **Schedule entity refresh**.
 
 ---
 
 ### FASE 6 — Pruebas end-to-end con curl (20 min)
 
 ```bash
-# 1. Crear cuenta origen
+# 1. Crear cuenta origen en accounts-api
 ACCT_ORIGEN=$(curl -s -X POST http://localhost:3001/accounts \
   -H "Content-Type: application/json" \
   -d '{"ownerId":"user-001","accountType":"savings","currency":"PEN","initialBalance":1000}' \
@@ -691,7 +687,7 @@ ACCT_DESTINO=$(curl -s -X POST http://localhost:3001/accounts \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['accountId'])")
 echo "Cuenta destino: $ACCT_DESTINO"
 
-# 3. Crear un pago
+# 3. Crear un pago en payments-api
 PAYMENT_ID=$(curl -s -X POST http://localhost:3000/payments \
   -H "Content-Type: application/json" \
   -d "{
@@ -707,8 +703,8 @@ echo "Pago creado:    $PAYMENT_ID"
 echo "--- Detalle del pago ---"
 curl -s http://localhost:3000/payments/$PAYMENT_ID | python3 -m json.tool
 
-# 5. Listar pagos creados
-echo "--- Pagos en estado 'created' ---"
+# 5. Listar pagos en estado created
+echo "--- Pagos pendientes ---"
 curl -s "http://localhost:3000/payments?status=created" | python3 -m json.tool
 
 # 6. Cancelar el pago
@@ -716,7 +712,7 @@ echo "--- Cancelando el pago ---"
 curl -s -X PATCH http://localhost:3000/payments/$PAYMENT_ID/cancel | python3 -m json.tool
 ```
 
-Observa en el terminal de `payments-api`:
+**Observa en el terminal de `payments-api`:**
 
 ```
 📋 [KAFKA EVENT SIMULADO]
@@ -724,20 +720,17 @@ Observa en el terminal de `payments-api`:
    Payload : { "paymentId": "...", "amount": 250, ... }
 ```
 
-Observa en el terminal de `notifications-service`:
+**Observa en el terminal de `notifications-service`:**
 
 ```
 📨 Evento recibido [payment.created]
    → [NOTIFICACIÓN ENVIADA]
-     Para    : acct-origen-01
      Mensaje : Tu pago de 250 PEN está siendo procesado...
 ```
 
 ---
 
 ### FASE 7 — Validación final (20 min)
-
-Verifica cada checkpoint antes de cerrar el lab:
 
 | # | Checkpoint | Dónde verificar | Estado |
 |---|-----------|-----------------|--------|
@@ -762,31 +755,45 @@ Verifica cada checkpoint antes de cerrar el lab:
 import apiDocsPlugin from '@backstage/plugin-api-docs/alpha';
 ```
 La barra `/alpha` es obligatoria. Sin ella el plugin se instala pero no registra
-sus extensiones en la UI.
+nada en la UI.
 
-**La spec OpenAPI no renderiza — muestra el YAML en texto plano**
-→ Mismo problema: el plugin no cargó correctamente. Verifica el import `/alpha`.
+**La spec OpenAPI muestra el YAML en texto plano en vez de Swagger UI**
+→ Mismo problema: el plugin no cargó. Verifica el import `/alpha` y reinicia.
 
-**Error al registrar: "Target https://... is not a valid location"**
-→ Backstage no puede alcanzar el archivo. Verifica que el servidor HTTP
-(`npx serve . -p 8080`) está corriendo y que la URL es accesible:
-```bash
-curl http://localhost:8080/all-components.yaml
-# Debe devolver el contenido YAML, no un error 404
+**Error al registrar: "Unable to read url... not allowed"**
+→ Estás usando una URL de `localhost`. Usa la URL de GitHub en su lugar:
+```
+https://github.com/TU_USUARIO/lab-04-backstage/blob/main/all-components.yaml
+```
+Si necesitas usar localhost de todas formas, agrega en `app-config.yaml`:
+```yaml
+backend:
+  reading:
+    allow:
+      - host: localhost:8080
 ```
 
 **Error: "group:default/guests not found"**
-→ Normal en Backstage nuevo. Cambia el `owner` en todos los `catalog-info.yaml`:
+→ Cambia el `owner` en todos los `catalog-info.yaml`:
 ```yaml
 spec:
   owner: user:default/guest   # en lugar de group:default/guests
 ```
 
+**GitHub devuelve 404 al hacer Analyze**
+→ Verifica que el repo es público, o que tienes el token configurado:
+```yaml
+# app-config.yaml
+integrations:
+  github:
+    - host: github.com
+      token: ${GITHUB_TOKEN}
+```
+
 **accounts-api: "No module named 'fastapi'"**
 → Instala desde la carpeta correcta:
 ```bash
-cd lab-04/accounts-api
-pip install -r requirements.txt
+cd lab-04/accounts-api && pip install -r requirements.txt
 ```
 
 **TechDocs muestra "Documentation not found"**
@@ -804,12 +811,16 @@ techdocs:
 **AsyncAPI Studio muestra error de parsing**
 → Verifica que el archivo empiece con `asyncapi: 2.6.0` (no versión 3.x).
 
+**Los cambios en el repo no se reflejan en Backstage**
+→ Backstage refresca el catálogo periódicamente. Para forzar el refresh:
+abre la entidad → menú de 3 puntos (⋮) → **Schedule entity refresh**.
+
 ---
 
 ## Referencias
 
 - [Backstage New Frontend System](https://backstage.io/docs/frontend-system/)
-- [plugin-api-docs en la nueva arquitectura](https://backstage.io/docs/reference/plugin-api-docs/)
+- [plugin-api-docs](https://backstage.io/docs/reference/plugin-api-docs/)
 - [OpenAPI Specification 3.0](https://swagger.io/specification/)
 - [AsyncAPI Specification 2.6](https://www.asyncapi.com/docs/reference/specification/v2.6.0)
 - [TechDocs — Backstage](https://backstage.io/docs/features/techdocs/)
