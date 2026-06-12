@@ -180,7 +180,7 @@ export default createApp({
 
 ```bash
 # Ctrl+C para detener, luego:
-yarn dev
+yarn start
 ```
 
 #### Paso 4 — Verificar que el plugin cargó
@@ -453,7 +453,7 @@ Antes de continuar, confirma:
 - [ ] Repo `lab-04-backstage` creado en GitHub y con push hecho
 - [ ] `apiDocsPlugin` importado desde `@backstage/plugin-api-docs/alpha` en `App.tsx`
 - [ ] `apiDocsPlugin` agregado al array `features` en `App.tsx`
-- [ ] Backstage reiniciado con `yarn dev`
+- [ ] Backstage reiniciado con `yarn start`
 - [ ] El menú lateral muestra **"APIs"**
 
 Si no ves "APIs" en el menú, **no avances** — revisa el Tema 1 primero.
