@@ -2,7 +2,7 @@
 ## Visualización del estado de Pods y Deployments (sin kubectl)
 
 > **Curso:** Backstage para Ingeniería de Plataformas  
-> **Nivel:** Postgrado – UTEC  
+> **Nivel:** Postgrado
 > **Prerequisito:** Backstage corriendo en local (`http://localhost:3000`)
 
 ---
