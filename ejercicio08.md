@@ -68,7 +68,23 @@ Deberías ver un JSON con los modelos instalados. Ollama escucha en `http://loca
 
 ---
 
-## Paso 4 — Crear el componente ChatBot
+## Paso 4 — Configurar el proxy en Backstage
+
+Abre **`app-config.yaml`** en la raíz del proyecto y agrega la sección `proxy` con el endpoint de Ollama:
+
+```yaml
+proxy:
+  endpoints:
+    '/ollama':
+      target: http://localhost:11434
+      changeOrigin: true
+```
+
+> Esto le dice al backend de Backstage que redirija las peticiones de `/api/proxy/ollama` hacia Ollama en `http://localhost:11434`.
+
+---
+
+## Paso 5 — Crear el componente ChatBot
 
 Crea la carpeta y el archivo:
 
@@ -315,11 +331,11 @@ export const ChatBotPage = () => {
 
 ---
 
-## Paso 5 — Registrar la página en App.tsx
+## Paso 6 — Registrar la página en App.tsx
 
 Abre **`packages/app/src/App.tsx`**.
 
-**5a.** Busca la línea que importa `createFrontendModule` y agrégale `createFrontendPlugin` y `PageBlueprint`:
+**6a.** Busca la línea que importa `createFrontendModule` y agrégale `createFrontendPlugin` y `PageBlueprint`:
 
 ```tsx
 // Antes:
@@ -329,7 +345,7 @@ import { createFrontendModule } from '@backstage/frontend-plugin-api';
 import { createFrontendModule, createFrontendPlugin, PageBlueprint } from '@backstage/frontend-plugin-api';
 ```
 
-**5b.** Antes del bloque `const signInPage = ...`, agrega el plugin del chatbot:
+**6b.** Antes del bloque `const signInPage = ...`, agrega el plugin del chatbot:
 
 ```tsx
 const chatbotPage = PageBlueprint.make({
@@ -348,7 +364,7 @@ const chatbotPlugin = createFrontendPlugin({
 });
 ```
 
-**5c.** Dentro de `createApp({ features: [...] })`, agrega `chatbotPlugin`:
+**6c.** Dentro de `createApp({ features: [...] })`, agrega `chatbotPlugin`:
 
 ```tsx
 export default createApp({
@@ -369,17 +385,17 @@ export default createApp({
 
 ---
 
-## Paso 6 — Agregar el ícono en el sidebar
+## Paso 7 — Agregar el ícono en el sidebar
 
 Abre **`packages/app/src/modules/nav/Sidebar.tsx`**.
 
-**6a.** Agrega el import del ícono junto a los otros imports de `@material-ui/icons`:
+**7a.** Agrega el import del ícono junto a los otros imports de `@material-ui/icons`:
 
 ```tsx
 import ChatIcon from '@material-ui/icons/Chat';
 ```
 
-**6b.** Dentro del `<SidebarGroup label="Menu" ...>`, agrega el item después de los existentes:
+**7b.** Dentro del `<SidebarGroup label="Menu" ...>`, agrega el item después de los existentes:
 
 ```tsx
 <SidebarGroup label="Menu" icon={<MenuIcon />}>
@@ -395,7 +411,7 @@ import ChatIcon from '@material-ui/icons/Chat';
 
 ---
 
-## Paso 7 — Probar el chatbot
+## Paso 8 — Probar el chatbot
 
 1. Asegúrate de que Ollama está corriendo: `ollama serve`
 2. Reinicia Backstage: `yarn start`
