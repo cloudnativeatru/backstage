@@ -189,7 +189,7 @@ const useStyles = makeStyles(theme => ({
 interface CostRow { name: string; cost: number; currency: string; }
 interface Creds { tenantId: string; clientId: string; clientSecret: string; subscriptionId: string; }
 
-const BACKEND = '/api/azure-billing/costs';
+const BACKEND = 'http://localhost:7007/api/azure-billing/costs';
 const OLLAMA = 'http://localhost:11434';
 
 const parseCosts = (data: any): CostRow[] => {
@@ -239,6 +239,7 @@ export const BillingPage = () => {
     setByService([]);
     setByRg([]);
     setAiText('');
+    setTab(0);
 
     sessionStorage.setItem('az_tenant', tenantId);
     sessionStorage.setItem('az_client', clientId);
@@ -584,11 +585,11 @@ fetch POST /api/azure-billing/costs  (×2 en paralelo: ServiceName + ResourceGro
         ↓
 Backend plugin (azureBilling.ts) recibe las credenciales
         ↓
-Backend → POST https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/token
-          (client_credentials grant → obtiene Bearer token de Azure)
+Backend usa @azure/identity (ClientSecretCredential) para obtener el token OAuth
+          (client_credentials grant contra login.microsoftonline.com, automático)
         ↓
 Backend → POST https://management.azure.com/subscriptions/.../query
-          (Azure Cost Management API → devuelve filas de costos)
+          (Azure Cost Management API con Bearer token → devuelve filas de costos)
         ↓
 Backend devuelve los datos al frontend
         ↓
