@@ -77,8 +77,14 @@ Crea la carpeta y el archivo:
 ```tsx
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  Box, TextField, Button, Paper, Typography,
-  CircularProgress, Container, Chip,
+  Box,
+  TextField,
+  Button,
+  Paper,
+  Typography,
+  CircularProgress,
+  Container,
+  Chip,
 } from '@material-ui/core';
 import { makeStyles } from '@material-ui/core/styles';
 import SendIcon from '@material-ui/icons/Send';
@@ -86,21 +92,36 @@ import { Page, Header, Content } from '@backstage/core-components';
 
 const useStyles = makeStyles(theme => ({
   chatContainer: {
-    display: 'flex', flexDirection: 'column',
-    height: 'calc(100vh - 220px)', gap: theme.spacing(2),
+    display: 'flex',
+    flexDirection: 'column',
+    height: 'calc(100vh - 220px)',
+    gap: theme.spacing(2),
   },
-  modelBar: { display: 'flex', alignItems: 'center', gap: theme.spacing(1) },
-  modelInput: { width: 200 },
+  modelBar: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+  },
+  modelInput: {
+    width: 200,
+  },
   messageList: {
-    flex: 1, overflowY: 'auto', padding: theme.spacing(2),
+    flex: 1,
+    overflowY: 'auto',
+    padding: theme.spacing(2),
     backgroundColor: theme.palette.background.default,
     borderRadius: theme.shape.borderRadius,
     border: `1px solid ${theme.palette.divider}`,
-    display: 'flex', flexDirection: 'column', gap: theme.spacing(1.5),
+    display: 'flex',
+    flexDirection: 'column',
+    gap: theme.spacing(1.5),
   },
   messageBubble: {
-    maxWidth: '80%', padding: theme.spacing(1.5, 2),
-    borderRadius: 12, wordBreak: 'break-word', whiteSpace: 'pre-wrap',
+    maxWidth: '80%',
+    padding: theme.spacing(1.5, 2),
+    borderRadius: 12,
+    wordBreak: 'break-word',
+    whiteSpace: 'pre-wrap',
   },
   userBubble: {
     alignSelf: 'flex-end',
@@ -110,20 +131,37 @@ const useStyles = makeStyles(theme => ({
   assistantBubble: {
     alignSelf: 'flex-start',
     backgroundColor: theme.palette.type === 'dark'
-      ? theme.palette.grey[800] : theme.palette.grey[100],
+      ? theme.palette.grey[800]
+      : theme.palette.grey[100],
     color: theme.palette.text.primary,
   },
-  inputRow: { display: 'flex', gap: theme.spacing(1), alignItems: 'flex-end' },
-  inputField: { flex: 1 },
-  sendButton: { height: 56, minWidth: 56 },
+  inputRow: {
+    display: 'flex',
+    gap: theme.spacing(1),
+    alignItems: 'flex-end',
+  },
+  inputField: {
+    flex: 1,
+  },
+  sendButton: {
+    height: 56,
+    minWidth: 56,
+  },
   emptyState: {
-    flex: 1, display: 'flex', flexDirection: 'column',
-    alignItems: 'center', justifyContent: 'center',
-    color: theme.palette.text.secondary, gap: theme.spacing(1),
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: theme.palette.text.secondary,
+    gap: theme.spacing(1),
   },
 }));
 
-interface Message { role: 'user' | 'assistant'; content: string; }
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+}
 
 const OLLAMA_URL = 'http://localhost:11434';
 
@@ -155,66 +193,115 @@ export const ChatBotPage = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model, messages: history, stream: false }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status} — ¿Ollama está corriendo?`);
+      }
+
       const data = await res.json();
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: data.message?.content ?? '(sin respuesta)',
-      }]);
+      setMessages(prev => [
+        ...prev,
+        { role: 'assistant', content: data.message?.content ?? '(sin respuesta)' },
+      ]);
     } catch (err: any) {
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: `❌ Error: ${err.message}\n\nVerifica que Ollama está activo:\n  ollama serve\n  ollama pull ${model}`,
-      }]);
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: `❌ ${err.message}\n\nAsegúrate de que Ollama está activo en ${OLLAMA_URL}:\n  ollama serve\n  ollama pull ${model}`,
+        },
+      ]);
     } finally {
       setLoading(false);
     }
   };
 
   const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
   };
 
   return (
     <Page themeId="tool">
-      <Header title="AI Chatbot" subtitle="Conversa con un modelo de lenguaje local vía Ollama" />
+      <Header
+        title="AI Chatbot"
+        subtitle="Conversa con un modelo de lenguaje local vía Ollama"
+      />
       <Content>
         <Container maxWidth="md">
           <Box className={classes.chatContainer}>
             <Box className={classes.modelBar}>
               <Typography variant="body2" color="textSecondary">Modelo:</Typography>
-              <TextField className={classes.modelInput} size="small" variant="outlined"
-                value={model} onChange={e => setModel(e.target.value)} placeholder="llama3.2" />
-              <Chip label="Ollama local" size="small" color="primary" variant="outlined" />
+              <TextField
+                className={classes.modelInput}
+                size="small"
+                variant="outlined"
+                value={model}
+                onChange={e => setModel(e.target.value)}
+                placeholder="llama3.2"
+              />
+              <Chip
+                label="Ollama local"
+                size="small"
+                color="primary"
+                variant="outlined"
+              />
             </Box>
+
             <Box className={classes.messageList}>
               {messages.length === 0 && (
                 <Box className={classes.emptyState}>
                   <Typography variant="h6">¿En qué puedo ayudarte?</Typography>
-                  <Typography variant="body2">Escribe una pregunta y presiona Enter.</Typography>
+                  <Typography variant="body2">
+                    Escribe una pregunta y presiona Enter o el botón de enviar.
+                  </Typography>
                 </Box>
               )}
+
               {messages.map((msg, i) => (
-                <Paper key={i} elevation={1}
-                  className={`${classes.messageBubble} ${msg.role === 'user' ? classes.userBubble : classes.assistantBubble}`}>
+                <Paper
+                  key={i}
+                  elevation={1}
+                  className={`${classes.messageBubble} ${
+                    msg.role === 'user' ? classes.userBubble : classes.assistantBubble
+                  }`}
+                >
                   <Typography variant="body2">{msg.content}</Typography>
                 </Paper>
               ))}
+
               {loading && (
-                <Box display="flex" alignItems="center" style={{ gap: 8, paddingLeft: 8 }}>
+                <Box display="flex" alignItems="center" gap={1} pl={1}>
                   <CircularProgress size={16} />
-                  <Typography variant="body2" color="textSecondary">{model} está pensando…</Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    {model} está pensando…
+                  </Typography>
                 </Box>
               )}
               <div ref={bottomRef} />
             </Box>
+
             <Box className={classes.inputRow}>
-              <TextField className={classes.inputField} multiline maxRows={4} variant="outlined"
+              <TextField
+                className={classes.inputField}
+                multiline
+                maxRows={4}
+                variant="outlined"
                 placeholder="Escribe tu pregunta… (Enter para enviar, Shift+Enter para nueva línea)"
-                value={input} onChange={e => setInput(e.target.value)}
-                onKeyDown={handleKey} disabled={loading} />
-              <Button className={classes.sendButton} variant="contained" color="primary"
-                onClick={sendMessage} disabled={loading || !input.trim()}>
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={handleKey}
+                disabled={loading}
+              />
+              <Button
+                className={classes.sendButton}
+                variant="contained"
+                color="primary"
+                onClick={sendMessage}
+                disabled={loading || !input.trim()}
+              >
                 <SendIcon />
               </Button>
             </Box>
