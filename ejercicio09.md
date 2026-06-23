@@ -13,8 +13,10 @@
 Mermaid es la librería que convierte texto en diagramas visuales. Instálala en el paquete `app`:
 
 ```bash
-yarn workspace app add mermaid
+yarn workspace app add mermaid@10
 ```
+
+> **Importante:** usa `mermaid@10` y no la versión más reciente. Mermaid v11+ es ESM-only y es incompatible con el bundler webpack que usa Backstage, lo que genera un error de compilación. La v10 tiene soporte CJS y funciona correctamente.
 
 Verifica que quedó en `packages/app/package.json` dentro de `dependencies`.
 
@@ -129,7 +131,46 @@ const SYSTEM_PROMPT = `You are an expert software architect specialized in creat
 The user will describe a software architecture or system in natural language.
 Your response must contain ONLY valid Mermaid diagram code — no explanation, no markdown fences, no extra text.
 Choose the most appropriate diagram type: graph TD, flowchart LR, sequenceDiagram, classDiagram, or erDiagram.
-Use clear and descriptive node labels in the same language the user writes in.`;
+Use clear and descriptive node labels in the same language the user writes in.
+
+STRICT SYNTAX RULES — follow exactly:
+- Node IDs (the identifier before [ or after -->) must be a SINGLE word with NO spaces — use camelCase (e.g. GitHubActions, ApiGateway, not "GitHub Actions")
+- Node labels inside [] CAN have spaces: GitHubActions["GitHub Actions"]
+- Node labels must NOT contain pipe characters (|) or angle brackets (< >)
+- For edge labels use ONLY the format: A -- "label" --> B  (never use -->|label| syntax)
+- Wrap all node labels and edge labels that contain spaces or special characters in double quotes
+- Example of valid edge: Client -- "HTTP Request" --> ApiGateway
+- Example of valid node: ApiGateway["API Gateway"]
+- Do NOT add any text before or after the diagram code`;
+
+const fixMermaid = (code: string): string => {
+  let result = code
+    .replace(/^```mermaid\s*/im, '')
+    .replace(/^```\s*/im, '')
+    .replace(/```\s*$/im, '')
+    .replace(/-->\|([^|]*)\|>/g, '-- "$1" -->')
+    .replace(/-->\|([^|]+)\|/g, '-- "$1" -->')
+    .replace(/\[([^\]]*)<([^>]*)>([^\]]*)\]/g, '["$1$2$3"]')
+    .replace(/\b([A-Za-z]\w*) +([A-Za-z]\w*) +([A-Za-z]\w*)(\s*[\[{(])/g, '$1$2$3$4')
+    .replace(/\b([A-Za-z]\w*) +([A-Za-z]\w*)(\s*[\[{(])/g, '$1$2$3')
+    .replace(/-->\s*([A-Za-z]\w*) +([A-Za-z]\w*) +([A-Za-z]\w*)/g, '--> $1$2$3')
+    .replace(/-->\s*([A-Za-z]\w*) +([A-Za-z]\w*)/g, '--> $1$2')
+    .trim();
+
+  const firstLine = result.split('\n')[0].trim().toLowerCase();
+
+  if (firstLine.startsWith('graph') || firstLine.startsWith('flowchart')) {
+    // ->> and -->> are sequenceDiagram syntax, invalid in graph context
+    result = result.replace(/-->>/g, '-->').replace(/->>(?!>)/g, '-->');
+  }
+
+  if (firstLine.startsWith('sequencediagram')) {
+    // ["label"] is graph syntax — strip it from participant names and references
+    result = result.replace(/\["[^"]*"\]/g, '');
+  }
+
+  return result;
+};
 
 const EXAMPLES = [
   'API REST con autenticación JWT, base de datos PostgreSQL y caché Redis',
@@ -200,13 +241,7 @@ export const DiagramPage = () => {
 
       const data = await res.json();
       const raw: string = data.message?.content ?? '';
-
-      // Strip markdown code fences if the model includes them anyway
-      const cleaned = raw
-        .replace(/^```mermaid\s*/i, '')
-        .replace(/^```\s*/i, '')
-        .replace(/```\s*$/i, '')
-        .trim();
+      const cleaned = fixMermaid(raw);
 
       if (!cleaned) throw new Error('El modelo no devolvió código Mermaid. Intenta con una descripción más específica.');
 
@@ -449,11 +484,15 @@ y un API Gateway que autentica con JWT.
 Usuario escribe descripción
         ↓
 DiagramPage envía POST a Ollama (llama3.2)
-con un system prompt que pide SOLO código Mermaid
+con un system prompt que pide SOLO código Mermaid válido
         ↓
 Ollama devuelve el código Mermaid
         ↓
-El componente limpia el texto (quita ```mermaid si viene)
+fixMermaid() limpia y corrige la respuesta:
+  - quita bloques ```mermaid si los incluye
+  - convierte sintaxis de aristas inválida (-->|label|) a formato correcto
+  - fusiona node IDs con espacios (GitHub Actions → GitHubActions)
+  - corrige sintaxis cruzada entre tipos de diagrama
         ↓
 mermaid.render() convierte el código en SVG
         ↓
@@ -471,3 +510,6 @@ El SVG se inyecta en el DOM → diagrama visual
 | El modelo devuelve texto en vez de Mermaid | El prompt no fue respetado | Prueba con una descripción más corta y específica |
 | Tarda mucho en generar | Modelo muy grande | Prueba con `llama3.2:1b` — edita `model: 'llama3.2'` en el código |
 | Error de compilación TypeScript | Falta el tipo de mermaid | Ejecuta `yarn workspace app add --dev @types/mermaid` |
+| "ESModulesLinkingError: export SCOPE not found in stylis" | Instalaste mermaid v11 en vez de v10 | Ejecuta `yarn workspace app add mermaid@10` |
+| "got 'NODE_STRING'" en línea 2 | El modelo generó IDs de nodos con espacios (`GitHub Actions`) | El `fixMermaid()` lo corrige automáticamente; si persiste, intenta con una descripción más simple |
+| "got 'MINUS'" o "got 'NODE_STRING'" | El modelo mezcló sintaxis de `sequenceDiagram` con `graph` (o viceversa) | El `fixMermaid()` lo corrige automáticamente; si persiste, simplifica la descripción |
