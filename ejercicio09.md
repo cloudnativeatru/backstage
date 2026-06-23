@@ -70,18 +70,10 @@ const useStyles = makeStyles(theme => ({
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'flex-start',
-    '& svg': {
-      maxWidth: '100%',
-    },
+    '& svg': { maxWidth: '100%' },
   },
-  codeContainer: {
-    position: 'relative',
-  },
-  copyButton: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-  },
+  codeContainer: { position: 'relative' },
+  copyButton: { position: 'absolute', top: 0, right: 0 },
   codeBlock: {
     backgroundColor: theme.palette.type === 'dark' ? '#1e1e1e' : '#f5f5f5',
     padding: theme.spacing(2),
@@ -119,9 +111,7 @@ const useStyles = makeStyles(theme => ({
     border: `1px solid ${theme.palette.divider}`,
     borderRadius: 16,
     fontSize: 12,
-    '&:hover': {
-      backgroundColor: theme.palette.action.hover,
-    },
+    '&:hover': { backgroundColor: theme.palette.action.hover },
   },
 }));
 
@@ -179,11 +169,7 @@ const EXAMPLES = [
   'CI/CD pipeline con GitHub Actions, Docker y deploy en Kubernetes',
 ];
 
-mermaid.initialize({
-  startOnLoad: false,
-  theme: 'default',
-  securityLevel: 'loose',
-});
+mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
 
 export const DiagramPage = () => {
   const classes = useStyles();
@@ -202,10 +188,7 @@ export const DiagramPage = () => {
     const renderDiagram = async () => {
       try {
         const { svg } = await mermaid.render(diagramId.current, mermaidCode);
-        if (diagramRef.current) {
-          diagramRef.current.innerHTML = svg;
-        }
-        // Regenerate ID to avoid conflicts on re-render
+        if (diagramRef.current) diagramRef.current.innerHTML = svg;
         diagramId.current = `mermaid-${Date.now()}`;
       } catch (e: any) {
         setError(`El diagrama generado tiene errores de sintaxis Mermaid.\n\nDetalle: ${e.message}\n\nIntenta con una descripción más detallada.`);
@@ -274,18 +257,11 @@ export const DiagramPage = () => {
         <Container maxWidth="lg">
           <Box className={classes.layout}>
 
-            {/* Input */}
             <Box className={classes.inputSection}>
-              <Typography variant="subtitle2" color="textSecondary">
-                Ejemplos rápidos:
-              </Typography>
+              <Typography variant="subtitle2" color="textSecondary">Ejemplos rápidos:</Typography>
               <Box className={classes.examples}>
                 {EXAMPLES.map(ex => (
-                  <span
-                    key={ex}
-                    className={classes.exampleChip}
-                    onClick={() => setDescription(ex)}
-                  >
+                  <span key={ex} className={classes.exampleChip} onClick={() => setDescription(ex)}>
                     {ex}
                   </span>
                 ))}
@@ -322,25 +298,21 @@ export const DiagramPage = () => {
               </Box>
             </Box>
 
-            {/* Result */}
             {(mermaidCode || error) && (
               <Paper className={classes.resultSection} elevation={2}>
                 <Tabs value={tab} onChange={(_, v) => setTab(v)}>
                   <Tab label="Diagrama" />
                   <Tab label="Código Mermaid" />
                 </Tabs>
-
                 <Box className={classes.tabPanel}>
                   {error && (
                     <Typography className={classes.errorBox}>❌ {error}</Typography>
                   )}
-
                   {!error && tab === 0 && (
                     <Box className={classes.diagramContainer}>
                       <div ref={diagramRef} />
                     </Box>
                   )}
-
                   {!error && tab === 1 && (
                     <Box className={classes.codeContainer}>
                       <Tooltip title={copied ? '¡Copiado!' : 'Copiar código'}>
