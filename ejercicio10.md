@@ -49,19 +49,14 @@ La salida te dará los valores que necesitarás en el formulario:
 
 Las APIs de autenticación de Azure (`login.microsoftonline.com`) no permiten llamadas directas desde el browser (CORS bloqueado para el flujo `client_credentials`). El backend de Backstage actúa como intermediario: recibe las credenciales, llama a Azure server-side y devuelve los datos al frontend.
 
+> **Nota:** El paquete `@azure/identity` ya viene instalado en el backend de Backstage. No necesitas ejecutar `yarn add`.
+
 Crea el archivo **`packages/backend/src/plugins/azureBilling.ts`**:
 
 ```typescript
 import { createBackendPlugin, coreServices } from '@backstage/backend-plugin-api';
-import express from 'express';
-
-interface CostQueryBody {
-  tenantId: string;
-  clientId: string;
-  clientSecret: string;
-  subscriptionId: string;
-  groupBy?: string;
-}
+import { ClientSecretCredential } from '@azure/identity';
+import express, { Request, Response } from 'express';
 
 export const azureBillingPlugin = createBackendPlugin({
   pluginId: 'azure-billing',
@@ -72,45 +67,28 @@ export const azureBillingPlugin = createBackendPlugin({
         const router = express.Router();
         router.use(express.json());
 
-        router.post('/costs', async (req, res) => {
+        router.post('/costs', async (req: Request, res: Response) => {
           const {
             tenantId, clientId, clientSecret, subscriptionId,
             groupBy = 'ServiceName',
-          }: CostQueryBody = req.body;
+          } = req.body;
 
           if (!tenantId || !clientId || !clientSecret || !subscriptionId) {
             return res.status(400).json({ error: 'Credenciales incompletas' });
           }
 
           try {
-            // 1. Obtener token OAuth de Azure AD
-            const tokenRes = await fetch(
-              `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({
-                  grant_type: 'client_credentials',
-                  client_id: clientId,
-                  client_secret: clientSecret,
-                  scope: 'https://management.azure.com/.default',
-                }).toString(),
-              },
-            );
+            // @azure/identity maneja el token OAuth automáticamente
+            const credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
+            const tokenResponse = await credential.getToken('https://management.azure.com/.default');
 
-            const tokenData = await tokenRes.json();
-            if (tokenData.error) {
-              return res.status(401).json({ error: `Auth Azure fallida: ${tokenData.error_description}` });
-            }
-
-            // 2. Consultar Azure Cost Management API
             const costRes = await fetch(
               `https://management.azure.com/subscriptions/${subscriptionId}/providers/Microsoft.CostManagement/query?api-version=2023-11-01`,
               {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
-                  Authorization: `Bearer ${tokenData.access_token}`,
+                  Authorization: `Bearer ${tokenResponse!.token}`,
                 },
                 body: JSON.stringify({
                   type: 'ActualCost',
@@ -125,11 +103,9 @@ export const azureBillingPlugin = createBackendPlugin({
             );
 
             const costData = await costRes.json();
-
             if (costData.error) {
               return res.status(400).json({ error: costData.error.message });
             }
-
             return res.json(costData);
           } catch (err: any) {
             return res.status(500).json({ error: err.message });
@@ -137,7 +113,6 @@ export const azureBillingPlugin = createBackendPlugin({
         });
 
         httpRouter.use(router);
-        // Permitir llamadas sin token de Backstage (el frontend llama directamente)
         httpRouter.addAuthPolicy({ path: '/costs', allow: 'unauthenticated' });
       },
     });
