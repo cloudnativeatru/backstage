@@ -14,10 +14,19 @@ Levantar Backstage completamente dockerizado con PostgreSQL como base de datos, 
 
 ## Contexto
 
-El proyecto ya tiene todo lo necesario para dockerizarlo. Antes de escribir cualquier comando, explora estos archivos:
+### Arquitectura en producción vs. desarrollo
+
+En desarrollo, `yarn start` levanta **dos procesos separados**: el frontend en el puerto 3000 y el backend en el 7007. En producción es diferente: el backend incluye el plugin `@backstage/plugin-app-backend`, que sirve el frontend compilado como archivos estáticos desde el mismo proceso Node. **Solo existe un contenedor para toda la app**, escuchando en el puerto 7007.
+
+Esto significa que antes de construir la imagen Docker, hay que compilar **tanto el frontend como el backend**. Investiga cuál de los scripts del `package.json` raíz hace ambas cosas.
+
+### Archivos que ya existen
+
+Antes de escribir cualquier comando, explora estos archivos:
 
 - `packages/backend/Dockerfile` — ya existe, generado por Backstage
 - `packages/backend/package.json` — tiene un script llamado `build-image`
+- `package.json` (raíz) — tiene varios scripts de build, no todos hacen lo mismo
 - `app-config.yaml` — configuración de desarrollo
 - `app-config.production.yaml` — configuración de producción (observa la sección `database`)
 - `.dockerignore` — ya existe en la raíz
@@ -76,10 +85,11 @@ Entiende qué hace cada uno **antes** de ejecutar nada. Usa IA si necesitas que 
 
 Reflexiona sobre estas preguntas y discútelas con tu equipo o en clase:
 
-1. ¿Por qué el Dockerfile no compila el código dentro del contenedor? ¿Qué ventajas y desventajas tiene ese enfoque?
-2. ¿Por qué el proceso de Node corre con un usuario no-root dentro del contenedor?
-3. ¿Cuándo usarías `docker compose down -v`? ¿En qué situación sería peligroso?
-4. Si un compañero cambia el código fuente de la app, ¿qué pasos hay que repetir para que el contenedor refleje los cambios?
+1. En desarrollo el frontend corre en el puerto 3000 y el backend en el 7007. En producción solo existe un contenedor en el 7007. ¿Qué mecanismo hace posible esto? ¿Qué plugin de Backstage está involucrado?
+2. ¿Por qué el Dockerfile no compila el código dentro del contenedor? ¿Qué ventajas y desventajas tiene ese enfoque?
+3. ¿Por qué el proceso de Node corre con un usuario no-root dentro del contenedor?
+4. ¿Cuándo usarías `docker compose down -v`? ¿En qué situación sería peligroso?
+5. Si un compañero cambia el código fuente de la app, ¿qué pasos hay que repetir para que el contenedor refleje los cambios?
 
 ---
 
