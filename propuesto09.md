@@ -35,23 +35,26 @@ Tu trabajo como **platform engineer** es construir el **golden path**: un Softwa
 
 ### Parte 1 — Repositorio de templates (`cna-templates`)
 
-Crea un repositorio en GitHub llamado `cna-templates` con esta estructura:
+Crea un repositorio en GitHub llamado `cna-templates` con esta estructura. Observa que hay **dos skeletons separados** — uno por cada repositorio que se creará:
 
 ```
 cna-templates/
 └── serverless-function/
     ├── template.yaml               # Definición del Software Template
-    └── skeleton/                   # Archivos que se generan al usar el template
-        ├── src/
-        │   └── handler.js
+    ├── skeleton-app/               # Archivos del repo de código
+    │   ├── src/
+    │   │   └── handler.js
+    │   ├── .github/
+    │   │   └── workflows/
+    │   │       └── deploy.yml
+    │   ├── catalog-info.yaml
+    │   └── README.md
+    └── skeleton-infra/             # Archivos del repo de infraestructura
         ├── terraform/
         │   ├── main.tf
         │   ├── variables.tf
         │   ├── outputs.tf
         │   └── provider.tf
-        ├── .github/
-        │   └── workflows/
-        │       └── deploy.yml
         ├── catalog-info.yaml
         └── README.md
 ```
@@ -69,41 +72,47 @@ El `template.yaml` es el corazón del ejercicio. Debe definir:
 
 **Parámetros del formulario (`spec.parameters`):**
 El formulario que ve el desarrollador en Backstage debe pedir:
-- Nombre de la función (el nombre del repositorio y de la Lambda)
+- Nombre de la función (base para el nombre de ambos repositorios y de la Lambda)
 - Descripción del servicio
 - Dueño del componente (owner)
 - Entorno destino (`dev` o `staging`)
 
 **Pasos (`spec.steps`):**
-El template debe ejecutar tres acciones en orden:
-1. `fetch:template` — copia los archivos de `skeleton/` al repo destino, reemplazando las variables del formulario
-2. `publish:github` — crea el repositorio en GitHub con el resultado del paso anterior
-3. `catalog:register` — registra el nuevo servicio en el catálogo de Backstage
+El template debe ejecutar **cinco pasos** en orden:
+
+1. `fetch:template` desde `skeleton-app/` → directorio temporal `app/`
+2. `publish:github` publicando desde `app/` → crea el repo `cna-{name}-app`
+3. `fetch:template` desde `skeleton-infra/` → directorio temporal `infra/`
+4. `publish:github` publicando desde `infra/` → crea el repo `cna-{name}-infra`
+5. `catalog:register` → registra el componente de aplicación en el catálogo
+
+> **Pista clave:** El Scaffolder trabaja en un workspace temporal. Cada paso `fetch:template` usa el parámetro `targetPath` para escribir en un subdirectorio distinto (`app/` e `infra/`). Cada paso `publish:github` usa `sourcePath` para publicar solo ese subdirectorio. Investiga esta combinación de parámetros en la documentación del Scaffolder.
 
 ---
 
 ### Parte 3 — Los archivos skeleton
 
-Los archivos en `skeleton/` son plantillas — usan la sintaxis `${{ values.nombre }}` para inyectar los valores que ingresó el desarrollador en el formulario.
+Los archivos en ambos skeletons usan la sintaxis `${{ values.nombre }}` para inyectar los valores del formulario.
 
-**`skeleton/src/handler.js`**  
-Una función Lambda Node.js que responda con JSON incluyendo un mensaje de bienvenida, el nombre del servicio (inyectado como variable) y un timestamp.
+**`skeleton-app/src/handler.js`**  
+Función Lambda Node.js que responda con JSON incluyendo un mensaje de bienvenida, el nombre del servicio (inyectado) y un timestamp.
 
-**`skeleton/terraform/main.tf`**  
+**`skeleton-app/.github/workflows/deploy.yml`**  
+Pipeline que en push a `main` empaqueta el código y ejecuta `aws lambda update-function-code`. **No ejecuta Terraform** — la infra es responsabilidad del otro repo. Las credenciales AWS vienen de GitHub Secrets.
+
+**`skeleton-app/catalog-info.yaml`**  
+Entidad `Component` con nombre, descripción y dueño inyectados. Debe tener una anotación que lo vincule al repo de infra como dependencia.
+
+**`skeleton-infra/terraform/main.tf`**  
 Terraform que crea:
 - IAM Role de ejecución con permisos mínimos
 - Función Lambda con nombre derivado del input del formulario
 - Lambda Function URL con acceso público
 
-Los valores variables (nombre de la función, entorno) deben venir de `variables.tf` — no hardcodeados.
+El nombre de la función y el entorno deben venir de `variables.tf` — no hardcodeados.
 
-**`skeleton/.github/workflows/deploy.yml`**  
-Pipeline que en push a `main` empaqueta el código y ejecuta `aws lambda update-function-code`. Las credenciales AWS vienen de GitHub Secrets.
-
-**`skeleton/catalog-info.yaml`**  
-Entidad de tipo `Component` con el nombre, descripción y dueño inyectados desde el formulario.
-
-> **Pista:** Los archivos skeleton usan `${{ values.name }}`, `${{ values.description }}`, `${{ values.owner }}` — las mismas variables que defines en `spec.parameters` del `template.yaml`. Revisa la documentación de Backstage Scaffolder para ver la sintaxis exacta.
+**`skeleton-infra/catalog-info.yaml`**  
+Entidad `Resource` (no `Component`) que representa la infraestructura de la Lambda.
 
 ---
 
@@ -127,11 +136,11 @@ Una vez registrado el template:
 
 ## Pistas
 
-- El `template.yaml` referencia los archivos skeleton con una ruta relativa. La estructura de carpetas importa
-- En `spec.steps`, cada paso `fetch:template` + `publish:github` trabajan en un workspace temporal — investiga cómo encadenan su output
-- El nombre del repositorio en GitHub generalmente se deriva del parámetro `name` del formulario. Investiga el campo `repoUrl` en el paso `publish:github`
-- `catalog-info.yaml` dentro del skeleton es lo que permite que `catalog:register` funcione — ese archivo le dice a Backstage qué tipo de entidad es el nuevo servicio
-- Si el template falla en Backstage, los logs del Scaffolder (en la propia UI de Backstage) muestran exactamente en qué paso y por qué
+- Cada par `fetch:template` + `publish:github` debe usar `targetPath` / `sourcePath` para no mezclarse en el workspace temporal. Si no los usas, el segundo `fetch:template` sobreescribe los archivos del primero
+- Los nombres de los dos repos deben ser predecibles y relacionados: `cna-{name}-app` y `cna-{name}-infra`. El `name` viene del formulario. Investiga cómo construir strings dinámicos en el `repoUrl` del paso `publish:github`
+- El pipeline del repo `app` necesita saber el nombre de la Lambda creada por el repo `infra`. Con naming convention basado en el mismo `name` del formulario, ambos repos pueden derivarlo sin comunicarse directamente
+- Si el template falla en Backstage, los logs del Scaffolder muestran exactamente en qué paso y por qué — es la primera herramienta de debugging
+- `catalog:register` al final solo necesita registrar el `catalog-info.yaml` del repo app — pero puedes registrar también el del repo infra si quieres que ambos aparezcan en el catálogo
 
 ---
 
@@ -139,51 +148,53 @@ Una vez registrado el template:
 
 | Criterio | Puntos |
 |---|---|
-| El template aparece en la pantalla Create de Backstage | 15 |
+| El template aparece en la pantalla Create de Backstage | 10 |
 | El formulario tiene los parámetros correctos y se muestra bien | 10 |
-| `publish:github` crea el repositorio con todos los archivos generados | 25 |
-| Las variables del formulario se inyectan correctamente en los archivos skeleton | 20 |
-| El nuevo servicio aparece registrado en el catálogo de Backstage | 15 |
-| El pipeline del repo generado despliega la Lambda correctamente | 15 |
+| Se crean **dos repositorios** en GitHub: `cna-{name}-app` y `cna-{name}-infra` | 25 |
+| Las variables del formulario se inyectan correctamente en ambos skeletons | 15 |
+| El nuevo servicio aparece registrado en el catálogo de Backstage | 10 |
+| `terraform apply` en el repo infra crea la Lambda sin errores | 15 |
+| El pipeline del repo app despliega el código sin tocar Terraform | 15 |
 | **Total** | **100** |
 
 **Puntos extra:**
 - +10 El formulario tiene validaciones (nombre sin espacios, longitud máxima)
-- +10 El template genera un segundo repositorio para la infra Terraform, separado del repo de código
-- +5 El `README.md` generado incluye la URL del endpoint como placeholder que el desarrollador debe completar
+- +10 El repo infra también aparece como entidad `Resource` en el catálogo de Backstage
+- +5 Los `README.md` de ambos repos generados explican claramente su responsabilidad
 
 ---
 
 ## Cómo verificar que funciona
 
 - [ ] El template aparece en Backstage → Create con su nombre, descripción y tags
-- [ ] Completar el formulario y hacer clic en Create no genera errores en el Scaffolder
-- [ ] El repositorio en GitHub existe y contiene los archivos con los valores correctos (no aparecen `${{ values.name }}` sin reemplazar)
-- [ ] El nuevo componente aparece en el catálogo de Backstage con el dueño y descripción correctos
-- [ ] `terraform apply` en el repo generado crea la Lambda sin errores
-- [ ] `curl <function-url>` responde con el JSON de la función
+- [ ] Al completar el formulario, el Scaffolder crea **dos repos** en GitHub sin errores
+- [ ] Ningún archivo generado contiene `${{ values.name }}` sin reemplazar
+- [ ] El nuevo componente aparece en el catálogo con dueño y descripción correctos
+- [ ] `terraform apply` en `cna-{name}-infra` crea la Lambda y muestra la Function URL como output
+- [ ] Un push al repo `cna-{name}-app` despliega el código y la URL responde con el JSON esperado
 
 ---
 
 ## Preguntas de análisis
 
-1. El template ejecuta `fetch:template` → `publish:github` → `catalog:register` en ese orden. ¿Qué pasaría si `catalog:register` falla después de que el repo ya fue creado? ¿Es idempotente el proceso?
+1. El template crea dos repos con un único clic. ¿Qué pasaría si el segundo `publish:github` falla después de que el primero ya creó el repo app? ¿Queda el catálogo y GitHub en un estado inconsistente? ¿Cómo lo resolverías?
 
-2. ¿Por qué el Terraform del skeleton tiene variables para el nombre y el entorno en lugar de valores hardcodeados? ¿Qué problema resuelve esto cuando se instancia el template para una segunda función?
+2. El pipeline del repo app necesita saber el nombre de la Lambda creada por el repo infra. ¿Cómo lo resuelves con naming convention? ¿Qué pasa si en el futuro el equipo de plataforma decide cambiar el naming? ¿Quién se ve afectado?
 
-3. Hoy el template crea un solo repositorio mezclando código e infra. ¿Cuál sería el diseño ideal para un entorno productivo real? ¿Qué implicaciones tendría tener dos repositorios generados desde un mismo template?
+3. El repo infra tiene su propio ciclo de vida: lo provisiona el platform engineer y no debería ser tocado por el desarrollador. ¿Cómo evitarías que el desarrollador haga push accidentalmente al repo infra? ¿Qué configuraciones de GitHub usarías?
 
-4. Un desarrollador usó el template, creó su función y seis meses después quiere cambiar la región de AWS. ¿Dónde haría ese cambio? ¿Cómo se aseguraría el equipo de plataforma de que todos los servicios creados con el template usen la misma región?
+4. Un desarrollador usó el template hace seis meses. El equipo de plataforma actualiza el template para usar una versión más nueva de Node.js. ¿Los repos creados antes se actualizan automáticamente? ¿Qué implicaciones tiene esto a escala (100 funciones creadas con el template)?
 
-5. ¿Qué ventaja tiene que el `catalog-info.yaml` sea generado por el template en lugar de que el desarrollador lo escriba manualmente?
+5. ¿Por qué el `catalog-info.yaml` del repo infra usa `kind: Resource` y el del repo app usa `kind: Component`? ¿Qué diferencia semántica tiene en el catálogo de Backstage?
 
 ---
 
 ## Entrega
 
 Comparte:
-1. Link al repositorio `cna-templates` con el `template.yaml` y el skeleton
-2. Captura de pantalla del template en la pantalla **Create** de Backstage
-3. Captura del Scaffolder ejecutando los pasos exitosamente
-4. Link al repositorio generado en GitHub
+1. Link al repositorio `cna-templates` con el `template.yaml` y los dos skeletons
+2. Captura del template en la pantalla **Create** de Backstage
+3. Captura del Scaffolder ejecutando los cinco pasos exitosamente
+4. Links a los **dos repositorios** generados en GitHub (`cna-{name}-app` y `cna-{name}-infra`)
 5. El nuevo servicio visible en el catálogo de Backstage
+6. Resultado del `curl` a la Function URL con la respuesta JSON
