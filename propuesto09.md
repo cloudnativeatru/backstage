@@ -1,6 +1,6 @@
 # Ejercicio Propuesto 09: Pipeline End-to-End para una Función Serverless
 
-**Tiempo estimado:** 60-75 minutos  
+**Tiempo estimado:** 75-90 minutos  
 **Herramientas permitidas:** Claude, GitHub Copilot, ChatGPT — cualquier IA  
 **Dificultad:** Alta  
 
@@ -8,92 +8,96 @@
 
 ## Prerequisitos
 
-Verifica que tienes esto instalado y configurado antes de empezar:
-
 - Cuenta de AWS con permisos para crear recursos Lambda e IAM
 - **Terraform CLI** — `terraform -version`
-- **AWS CLI** — `aws configure` (necesitas `AWS_ACCESS_KEY_ID` y `AWS_SECRET_ACCESS_KEY`)
-- **GitHub CLI** o cuenta de GitHub para crear repositorios y configurar Secrets
+- **AWS CLI** configurado — `aws configure`
+- Cuenta de GitHub para crear los dos repositorios y configurar Secrets
 
 ---
 
 ## Escenario
 
-Un desarrollador del equipo pide un endpoint HTTP serverless que responda con información del portal. Como **platform engineer**, tu trabajo no es escribir la lógica de negocio — es construir el andamiaje completo para que cualquier desarrollador pueda hacer push de su función y que quede desplegada automáticamente.
+Un desarrollador del equipo solicita desplegar una función serverless. Como **platform engineer**, tu responsabilidad es:
 
-El desarrollador solo debería tener que editar `src/handler.js` y hacer push a `main`. El resto — infraestructura, empaquetado, deploy — debe ocurrir solo.
+1. Provisionar la infraestructura necesaria en AWS (el "landing zone")
+2. Dejarle al desarrollador un repositorio listo donde solo tenga que editar su código y hacer push
+
+En producción, **infraestructura y código de aplicación no viven en el mismo repositorio**. La infra es propiedad del equipo de plataforma y tiene su propio ciclo de vida, revisión y pipeline. El desarrollador no debería ni saber cómo está construida la infra — solo necesita saber el endpoint que recibe como output.
 
 ---
 
-## Lo que debes crear
+## Dos repositorios, dos responsabilidades
 
-### 1. Repositorio en GitHub
+### Repo 1 — `cna-platform-infra` (equipo de plataforma)
 
-Crea un repositorio llamado `cna-serverless-function` con esta estructura:
+Contiene el Terraform que crea la infraestructura. El desarrollador nunca toca este repositorio.
 
+Estructura sugerida:
 ```
-cna-serverless-function/
-├── src/
-│   └── handler.js              # La función Lambda
+cna-platform-infra/
 ├── terraform/
-│   ├── provider.tf             # AWS provider
-│   ├── main.tf                 # Lambda + Function URL + IAM Role
-│   ├── variables.tf            # Variables configurables
-│   └── outputs.tf              # URL del endpoint como output
+│   ├── modules/
+│   │   └── lambda-service/     # Módulo reutilizable
+│   │       ├── main.tf
+│   │       ├── variables.tf
+│   │       └── outputs.tf
+│   └── environments/
+│       └── dev/                # Instancia del módulo para dev
+│           ├── main.tf
+│           ├── variables.tf
+│           └── backend.tf
 ├── .github/
 │   └── workflows/
-│       └── deploy.yml          # Pipeline CI/CD
-├── .gitignore
+│       └── infra-deploy.yml
 └── README.md
 ```
 
+**Qué debe crear el módulo `lambda-service`:**
+- IAM Role de ejecución con permisos mínimos para Lambda
+- Función Lambda con un nombre predecible basado en variables (ej. `cna-{nombre}-{entorno}`)
+- Lambda Function URL con acceso público
+- Output: el nombre de la función y la URL del endpoint
+
+**El pipeline de infra** (`infra-deploy.yml`) se dispara manualmente o en push a `main` y ejecuta `terraform apply`. Las credenciales AWS vienen de GitHub Secrets.
+
 ---
 
-### 2. La función (`src/handler.js`)
+### Repo 2 — `cna-serverless-function` (equipo de desarrollo)
 
-Una función Lambda Node.js que responda a cualquier petición HTTP con un JSON que contenga:
+Contiene únicamente el código de la función y el pipeline que despliega solo el código — **sin tocar la infraestructura**.
 
+Estructura sugerida:
+```
+cna-serverless-function/
+├── src/
+│   └── handler.js
+├── .github/
+│   └── workflows/
+│       └── deploy.yml
+└── README.md
+```
+
+**La función** (`src/handler.js`) debe responder con un JSON que incluya:
 - Un mensaje de bienvenida
-- El nombre del entorno (`dev`, `staging`, `prod`) — que venga de una variable de entorno
-- Un timestamp del momento en que fue invocada
+- El entorno donde corre (variable de entorno)
+- Un timestamp de invocación
 
----
+**El pipeline del desarrollador** (`deploy.yml`) se dispara en push a `main` y hace únicamente esto:
+1. Empaqueta el código (`zip`)
+2. Actualiza el código de la Lambda existente (`aws lambda update-function-code`)
+3. No ejecuta Terraform — la infra ya existe
 
-### 3. La infraestructura (Terraform)
-
-Crea en AWS los recursos mínimos necesarios para que la función sea invocable vía HTTPS:
-
-- Un **IAM Role** de ejecución para Lambda con permisos mínimos
-- La **función Lambda** apuntando al código en `src/`
-- Una **Lambda Function URL** con acceso público (sin autenticación)
-
-> **Pista:** Para empaquetar el código fuente antes de subirlo, investiga el data source `archive_file` del provider `hashicorp/archive`. Terraform puede generar el ZIP sin necesidad de un paso de build manual.
-
-> **Pista:** El `terraform.tfstate` nunca debe subirse al repositorio. Investiga cómo usar S3 como backend remoto para el estado — o al menos agrégalo al `.gitignore`.
-
----
-
-### 4. El pipeline (`.github/workflows/deploy.yml`)
-
-El workflow debe dispararse en cada push a `main` y ejecutar:
-
-1. Checkout del código
-2. Configurar credenciales AWS desde **GitHub Secrets** (no hardcodeadas)
-3. Setup de Terraform
-4. `terraform init`
-5. `terraform apply -auto-approve`
-
-Al final del workflow, el output de Terraform con la URL del endpoint debe ser visible en los logs.
+> **Pregunta clave:** ¿Cómo sabe el pipeline del repo 2 el nombre de la Lambda creada por el repo 1? Investiga las opciones: naming convention acordada, AWS SSM Parameter Store, o variable de entorno en GitHub Secrets. Elige la que te parezca más robusta y justifícala.
 
 ---
 
 ## Pistas
 
-- Lambda Function URL es más simple que API Gateway para este caso — genera un endpoint HTTPS directo sin recursos adicionales
-- Las credenciales AWS para el pipeline van como **GitHub Secrets** (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`). El step de GitHub Actions `aws-actions/configure-aws-credentials` sabe cómo inyectarlas
-- Terraform necesita una región AWS. Puedes declararla como variable o hardcodearla en el provider para este ejercicio
-- Cuando el pipeline hace `terraform apply` por segunda vez (segundo push), Terraform compara el estado actual con el deseado y solo actualiza lo que cambió — eso es idempotencia
-- El runtime de Lambda para Node.js en AWS es `nodejs20.x`
+- El módulo Terraform `lambda-service` debe ser genérico y reutilizable — debería poder instanciarse para crear otra función diferente solo cambiando las variables
+- `aws lambda update-function-code` solo actualiza el código, no la configuración de la función. La configuración (memoria, timeout, variables de entorno) la gestiona Terraform
+- El pipeline del desarrollador necesita credenciales AWS con permisos **solo** para `lambda:UpdateFunctionCode` — no más. Piensa en el principio de least privilege
+- Investiga la diferencia entre `terraform apply` y `aws lambda update-function-code` para entender por qué se usa cada uno en cada repo
+- El state de Terraform debe estar en S3, no en el repositorio. El backend debe configurarse en `environments/dev/backend.tf`
 
 ---
 
@@ -101,50 +105,51 @@ Al final del workflow, el output de Terraform con la URL del endpoint debe ser v
 
 | Criterio | Puntos |
 |---|---|
-| El repositorio tiene la estructura completa con todos los archivos | 10 |
-| `terraform apply` crea los recursos sin errores desde cero | 25 |
-| La Function URL responde con el JSON correcto al hacer `curl` | 25 |
-| El pipeline de GitHub Actions completa exitosamente en push a `main` | 25 |
-| Las credenciales AWS están en Secrets y no aparecen en ningún archivo del repo | 15 |
+| `cna-platform-infra`: el módulo Terraform crea la infra sin errores | 20 |
+| `cna-platform-infra`: el pipeline de infra funciona con `terraform apply` | 15 |
+| `cna-serverless-function`: la Function URL responde con el JSON correcto | 20 |
+| `cna-serverless-function`: el pipeline actualiza solo el código sin tocar la infra | 20 |
+| Separación correcta de responsabilidades entre los dos repos | 15 |
+| Credenciales AWS en Secrets con permisos diferenciados por repo | 10 |
 | **Total** | **100** |
 
 **Puntos extra:**
-- +10 El estado de Terraform usa un backend remoto en S3
-- +10 El pipeline incluye `terraform plan` antes del apply y muestra el diff en los logs
-- +5 El `README.md` documenta en 5 pasos cómo un desarrollador nuevo usaría este repo
+- +10 El módulo Terraform es reutilizable y se puede instanciar para un segundo entorno (`staging`) solo cambiando variables
+- +10 El pipeline del repo 2 espera confirmación de que el update de Lambda fue exitoso antes de reportar éxito
+- +5 El `README.md` del repo 2 describe en menos de 10 líneas todo lo que un nuevo desarrollador necesita saber
 
 ---
 
 ## Cómo verificar que funciona
 
-- [ ] `terraform apply` completa sin errores y muestra la Function URL como output
+- [ ] `terraform apply` en `environments/dev` crea los recursos y muestra la Function URL como output
 - [ ] `curl <function-url>` responde con el JSON esperado
-- [ ] Un push a `main` dispara el workflow en GitHub Actions y completa sin errores
-- [ ] Un segundo push (modificando el mensaje de la función) redespliega automáticamente
-- [ ] `terraform destroy` limpia todos los recursos sin errores
+- [ ] Un push al repo `cna-serverless-function` dispara el pipeline y actualiza la Lambda **sin ejecutar Terraform**
+- [ ] Modificar el mensaje en `handler.js` y hacer push refleja el cambio al invocar la URL
+- [ ] `terraform destroy` en el repo de infra limpia todos los recursos sin errores
 
-> **Importante:** Ejecuta `terraform destroy` al terminar el ejercicio para no generar costos en tu cuenta de AWS.
+> **Importante:** Ejecuta `terraform destroy` al terminar para no generar costos en tu cuenta AWS.
 
 ---
 
 ## Preguntas de análisis
 
-1. ¿Qué pasa si dos platform engineers ejecutan `terraform apply` al mismo tiempo desde sus máquinas locales? ¿Cómo lo resuelve un backend remoto con state locking?
+1. El pipeline del desarrollador usa `aws lambda update-function-code` en lugar de `terraform apply`. ¿Qué problema generaría si el desarrollador pudiera ejecutar `terraform apply` en el repo de infra directamente?
 
-2. El IAM Role de Lambda tiene permisos mínimos. ¿Qué permisos exactos necesita una función Lambda básica para ejecutarse? ¿Qué pasaría si le dieras `AdministratorAccess`?
+2. ¿Cómo decidiste compartir el nombre de la Lambda entre los dos repos? ¿Qué ventajas y riesgos tiene tu enfoque vs. las otras opciones?
 
-3. En un equipo real, ¿el pipeline debería hacer `terraform apply` directamente en cada push a `main`, o habría algún mecanismo de aprobación humana antes? ¿Para qué entorno sí y para cuál no?
+3. Los dos pipelines tienen credenciales AWS distintas con permisos distintos. ¿Por qué es importante esto? ¿Qué pasaría si ambos usaran la misma IAM Key con `AdministratorAccess`?
 
-4. Lambda Function URL vs. API Gateway: ¿qué te da API Gateway que Function URL no tiene? ¿Cuándo valdría la pena la complejidad adicional?
+4. Si mañana el equipo de plataforma decide cambiar de Lambda Function URL a API Gateway, ¿qué cambios requeriría el repo de infra y qué cambios (si alguno) requeriría el repo del desarrollador?
 
-5. Hoy el pipeline hace deploy cada vez que alguien hace push a `main`. ¿Cómo modificarías el workflow para que solo haga deploy si los archivos en `src/` o `terraform/` cambiaron?
+5. En un equipo real, ¿quién debería poder aprobar PRs en `cna-platform-infra`? ¿Debería ser el mismo grupo que aprueba PRs en `cna-serverless-function`?
 
 ---
 
 ## Entrega
 
 Comparte:
-1. Link al repositorio de GitHub (puede ser público o privado con acceso al instructor)
-2. Output de `terraform apply` mostrando los recursos creados y la Function URL
-3. Captura del workflow de GitHub Actions ejecutándose exitosamente
-4. El resultado del `curl` a la Function URL con la respuesta JSON
+1. Links a los dos repositorios de GitHub
+2. Output de `terraform apply` con los recursos creados y la Function URL
+3. Captura del pipeline del repo de función ejecutándose exitosamente (sin Terraform)
+4. Resultado del `curl` a la Function URL antes y después de un cambio en el código
